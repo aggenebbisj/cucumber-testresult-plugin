@@ -35,6 +35,7 @@ import gherkin.formatter.model.ScenarioOutline;
 import gherkin.formatter.model.Step;
 import gherkin.formatter.model.Tag;
 import hudson.model.TaskListener;
+import java.util.Base64;
 
 import java.util.List;
 import java.util.logging.Level;
@@ -269,6 +270,9 @@ class GherkinCallback implements Formatter, Reporter {
 
 	public void embedding(String mimeType, byte[] data) {
 		LOG.log(Level.FINE, "rep  embedding: {0}", mimeType);
+                currentScenarioResult.addEmbeddedItem(
+                        new EmbeddedItem(new String(Base64.getEncoder().encode(data)))
+                );
 	}
 
 

@@ -39,380 +39,376 @@ import org.kohsuke.stapler.export.ExportedBean;
 
 /**
  * Represents a Scenario belonging to a Feature from Cucumber.
- * 
+ *
  * @author James Nord
  */
 @ExportedBean
 public class ScenarioResult extends TestResult {
 
-	private static final long serialVersionUID = 6813769160332278223L;
+    private static final long serialVersionUID = 6813769160332278223L;
 
-	private static final Logger LOGGER = Logger.getLogger(ScenarioResult.class.getName());
+    private static final Logger LOGGER = Logger.getLogger(ScenarioResult.class.getName());
 
-	private Scenario scenario;
+    private Scenario scenario;
 
-	private List<StepResult> steps = new ArrayList<StepResult>();
+    private List<StepResult> steps = new ArrayList<StepResult>();
 
-	/** Possibly empty list of code executed before the Scenario. */
-	private List<BeforeAfterResult> beforeResults = new ArrayList<BeforeAfterResult>();
-	/** Possibly <code>null</code> Background executed before the Scenario. */
-	private BackgroundResult backgroundResult = null;
-	/** Possibly empty list of code executed before the Scenario. */
-	private List<BeforeAfterResult> afterResults = new ArrayList<BeforeAfterResult>();
+    /**
+     * Possibly empty list of code executed before the Scenario.
+     */
+    private List<BeforeAfterResult> beforeResults = new ArrayList<BeforeAfterResult>();
+    /**
+     * Possibly <code>null</code> Background executed before the Scenario.
+     */
+    private BackgroundResult backgroundResult = null;
+    /**
+     * Possibly empty list of code executed before the Scenario.
+     */
+    private List<BeforeAfterResult> afterResults = new ArrayList<BeforeAfterResult>();
 
-	private FeatureResult parent;
-	
-	private transient AbstractBuild<?, ?> owner;
-	private transient String safeName;
+    private FeatureResult parent;
 
-	// true if this test failed
-	private transient boolean failed;
-	private transient boolean skipped;
-	
-	private transient float duration;
+    private transient AbstractBuild<?, ?> owner;
+    private transient String safeName;
 
-   /**
-    * This test has been failing since this build number (not id.)
-    *
-    * If {@link #isPassed() passing}, this field is left unused to 0.
-    */
-   private int failedSince;
-   
-	
-	ScenarioResult(Scenario scenario, BackgroundResult backgroundResult) {
-		this.scenario = scenario;
-		this.backgroundResult = backgroundResult;
-	}
+    // true if this test failed
+    private transient boolean failed;
+    private transient boolean skipped;
 
-	@Override
-	@Exported(visibility=9)
-	public String getName() {
-		return scenario.getName();
-	}
-	
+    private transient float duration;
+
+    /**
+     * This test has been failing since this build number (not id.)
+     *
+     * If {@link #isPassed() passing}, this field is left unused to 0.
+     */
+    private int failedSince;
+    
+    private List<EmbeddedItem> embeddedItems = new ArrayList<EmbeddedItem>();
+
+    ScenarioResult(Scenario scenario, BackgroundResult backgroundResult) {
+        this.scenario = scenario;
+        this.backgroundResult = backgroundResult;
+    }
+
+    @Override
+    @Exported(visibility = 9)
+    public String getName() {
+        return scenario.getName();
+    }
+
 	// XXX: getFullName was added in 1.594+
-	// when we bump core this should be tagged as an override.
+    // when we bump core this should be tagged as an override.
 	/* @Override */
-	public String getFullName() {
-		return getParent().getName() + " \u01c2 " + getName();
-	}
+    public String getFullName() {
+        return getParent().getName() + " \u01c2 " + getName();
+    }
 
-	/*
+    /*
 	 * Whilst a ScenarioResult contains a TestResult we do not count those individually. That would be akin to
 	 * reporting each JUnit Assert as a test.
-	 */
-	@Override
-	public int getFailCount() {
-		return (failed ? 1 : 0);
-	}
+     */
+    @Override
+    public int getFailCount() {
+        return (failed ? 1 : 0);
+    }
 
-	@Override
-	public synchronized String getSafeName() {
-		if (safeName != null) {
-			return safeName;
-		}
-		String name = safe(scenario.getId());
-		String parentName = parent.getSafeName() + ';';
-		
-		if (name.startsWith(parentName)) {
-			name = name.replace(parentName, "");
-		}
-		safeName = uniquifyName(parent.getChildren(), name);
-		return safeName;
-	}
-	
-	@Override
-	public int getSkipCount() {
-		return (skipped ? 1 : 0);
-	}
+    @Override
+    public synchronized String getSafeName() {
+        if (safeName != null) {
+            return safeName;
+        }
+        String name = safe(scenario.getId());
+        String parentName = parent.getSafeName() + ';';
 
+        if (name.startsWith(parentName)) {
+            name = name.replace(parentName, "");
+        }
+        safeName = uniquifyName(parent.getChildren(), name);
+        return safeName;
+    }
 
-	@Override
-	@Exported(visibility=9)
-	public int getPassCount() {
-		// we are passed if we are not skipped and not failed.
-		return (skipped || failed) ? 0 : 1;
-	}
+    @Override
+    public int getSkipCount() {
+        return (skipped ? 1 : 0);
+    }
 
+    @Override
+    @Exported(visibility = 9)
+    public int getPassCount() {
+        // we are passed if we are not skipped and not failed.
+        return (skipped || failed) ? 0 : 1;
+    }
 
-	
-	@Override
-	public AbstractBuild<?, ?> getOwner() {
-		return owner;
-	}
+    @Override
+    public AbstractBuild<?, ?> getOwner() {
+        return owner;
+    }
 
+    public void setOwner(AbstractBuild<?, ?> owner) {
+        this.owner = owner;
+        for (BeforeAfterResult bar : beforeResults) {
+            bar.setOwner(owner);
+        }
+        for (BeforeAfterResult bar : afterResults) {
+            bar.setOwner(owner);
+        }
+        for (StepResult sr : steps) {
+            sr.setOwner(owner);
+        }
+        if (backgroundResult != null) {
+            backgroundResult.setOwner(owner);
+        }
+    }
 
-	public void setOwner(AbstractBuild<?, ?> owner) {
-		this.owner = owner;
-		for (BeforeAfterResult bar : beforeResults) {
-			bar.setOwner(owner);
-		}
-		for (BeforeAfterResult bar : afterResults) {
-			bar.setOwner(owner);
-		}
-		for (StepResult sr : steps) {
-			sr.setOwner(owner);
-		}
-		if (backgroundResult != null) {
-			backgroundResult.setOwner(owner);
-		}
-	}
+    @Override
+    public FeatureResult getParent() {
+        return parent;
+    }
 
+    protected void setParent(FeatureResult parent) {
+        this.parent = parent;
+    }
 
-	@Override
-	public FeatureResult getParent() {
-		return parent;
-	}
+    @Override
+    public TestResult findCorrespondingResult(String id) {
+        // we have no children so it is either us or null
+        if (id.equals(getId())) {
+            return this;
+        }
+        return null;
+    }
 
+    public String getDisplayName() {
+        return getName();
+    }
 
-	protected void setParent(FeatureResult parent) {
-		this.parent = parent;
-	}
+    public BackgroundResult getBackgroundResult() {
+        return backgroundResult;
+    }
 
+    public List<BeforeAfterResult> getAfterResults() {
+        return afterResults;
+    }
 
-	@Override
-	public TestResult findCorrespondingResult(String id) {
-		// we have no children so it is either us or null
-		if (id.equals(getId())) {
-			return this;
-		}
-		return null;
-	}
+    void addAfterResult(BeforeAfterResult afterResult) {
+        afterResults.add(afterResult);
+    }
 
+    public List<BeforeAfterResult> getBeforeResults() {
+        return beforeResults;
+    }
 
-	public String getDisplayName() {
-		return getName();
-	}
+    void addBeforeResult(BeforeAfterResult beforeResult) {
+        beforeResults.add(beforeResult);
+    }
 
+    void addStepResult(StepResult stepResult) {
+        steps.add(stepResult);
+    }
 
-	public BackgroundResult getBackgroundResult() {
-		return backgroundResult;
-	}
+    public Collection<StepResult> getStepResults() {
+        return steps;
+    }
 
+    public Scenario getScenario() {
+        return scenario;
+    }
 
-	public List<BeforeAfterResult> getAfterResults() {
-		return afterResults;
-	}
+    @Override
+    @Exported(visibility = 9)
+    public float getDuration() {
+        return duration;
+    }
 
+    @Exported(name = "status", visibility = 9)
+    // stapler strips the trailing 's'
+    public Status getStatus() {
+        if (getSkipCount() > 0) {
+            // treat pending as skipped (undefined are errors).
+            return Status.SKIPPED;
+        }
+        ScenarioResult psr = (ScenarioResult) getPreviousResult();
+        if (psr == null) {
+            return isPassed() ? Status.PASSED : Status.FAILED;
+        }
+        if (psr.isPassed()) {
+            return isPassed() ? Status.PASSED : Status.REGRESSION;
+        } else {
+            return isPassed() ? Status.FIXED : Status.FAILED;
+        }
+    }
 
-	void addAfterResult(BeforeAfterResult afterResult) {
-		afterResults.add(afterResult);
-	}
-
-
-	public List<BeforeAfterResult> getBeforeResults() {
-		return beforeResults;
-	}
-
-
-	void addBeforeResult(BeforeAfterResult beforeResult) {
-		beforeResults.add(beforeResult);
-	}
-
-
-	void addStepResult(StepResult stepResult) {
-		steps.add(stepResult);
-	}
-
-	public Collection<StepResult> getStepResults() {
-		return steps;
-	}
-	
-	public Scenario getScenario() {
-		return scenario;
-	}
-
-	@Override
-	@Exported(visibility=9)
-	public float getDuration() {
-		return duration;
-	}
-	
-
-	@Exported(name = "status", visibility = 9)
-	// stapler strips the trailing 's'
-	public Status getStatus() {
-		if (getSkipCount() > 0) {
-			// treat pending as skipped (undefined are errors).
-			return Status.SKIPPED;
-		}
-		ScenarioResult psr = (ScenarioResult) getPreviousResult();
-		if (psr == null) {
-			return isPassed() ? Status.PASSED : Status.FAILED;
-		}
-		if (psr.isPassed()) {
-			return isPassed() ? Status.PASSED : Status.REGRESSION;
-		}
-		else {
-			return isPassed() ? Status.FIXED : Status.FAILED;
-		}
-	}
-
-
-	/**
-	 * If this test failed, then return the build number when this test started failing.
-	 */
-	@Override
-	@Exported(visibility = 9)
-	public int getFailedSince() {
+    /**
+     * If this test failed, then return the build number when this test started
+     * failing.
+     */
+    @Override
+    @Exported(visibility = 9)
+    public int getFailedSince() {
 		// If we haven't calculated failedSince yet, and we should,
-		// do it now.
-		if (failedSince == 0 && getFailCount() == 1) {
-			ScenarioResult prev = (ScenarioResult) getPreviousResult();
-			if (prev != null && !prev.isPassed())
-				this.failedSince = prev.getFailedSince();
-			else if (getOwner() != null) {
-				this.failedSince = getOwner().getNumber();
-			}
-			else {
-				LOGGER.warning("Can not calculate failed since. we have a previous result but no owner.");
-				// failedSince will be 0, which isn't correct.
-			}
-		}
-		return failedSince;
-	}
+        // do it now.
+        if (failedSince == 0 && getFailCount() == 1) {
+            ScenarioResult prev = (ScenarioResult) getPreviousResult();
+            if (prev != null && !prev.isPassed()) {
+                this.failedSince = prev.getFailedSince();
+            } else if (getOwner() != null) {
+                this.failedSince = getOwner().getNumber();
+            } else {
+                LOGGER.warning("Can not calculate failed since. we have a previous result but no owner.");
+                // failedSince will be 0, which isn't correct.
+            }
+        }
+        return failedSince;
+    }
 
-	/**
-	 * Gets the number of consecutive builds (including this) that this test case has been failing.
-	 */
-	@Exported(visibility = 9)
-	public int getAge() {
-		if (isPassed())
-			return 0;
-		else if (getOwner() != null) {
-			return getOwner().getNumber() - getFailedSince() + 1;
-		}
-		else {
-			LOGGER.fine("Trying to get age of a ScenarioResult without an owner");
-			return 0;
-		}
-	}
+    /**
+     * Gets the number of consecutive builds (including this) that this test
+     * case has been failing.
+     */
+    @Exported(visibility = 9)
+    public int getAge() {
+        if (isPassed()) {
+            return 0;
+        } else if (getOwner() != null) {
+            return getOwner().getNumber() - getFailedSince() + 1;
+        } else {
+            LOGGER.fine("Trying to get age of a ScenarioResult without an owner");
+            return 0;
+        }
+    }
 
+    @Override
+    public void tally() {
+        failed = false;
+        duration = 0.0f;
+        for (StepResult sr : steps) {
+            duration += sr.getDuration();
+            if (sr.getFailCount() != 0) {
+                failed = true;
+            }
+            if (sr.getSkipCount() != 0) {
+                skipped = true;
+            }
+        }
 
-	@Override
-	public void tally() {
-		failed = false;
-		duration = 0.0f;
-		for (StepResult sr : steps) {
-			duration += sr.getDuration();
-			if (sr.getFailCount() != 0) {
-				failed = true;
-			}
-			if (sr.getSkipCount() != 0) {
-				skipped = true;
-			}
-		}
-		
-		if (backgroundResult != null) {
-			backgroundResult.tally();
-			duration += backgroundResult.getDuration();
-			if (backgroundResult.getFailCount() != 0) {
-				failed = true;
-			}
-			if (backgroundResult.getSkipCount() != 0) {
-				skipped = true;
-			}
-		}
-		for (BeforeAfterResult bar : beforeResults) {
-			duration += bar.getDuration();
-			if (bar.getFailCount() != 0) {
-				failed = true;
-			}
-			if (bar.getSkipCount() != 0) {
-				skipped = true;
-			}
-		}
-		for (BeforeAfterResult bar : afterResults) {
-			duration += bar.getDuration();
-			if (bar.getFailCount() != 0) {
-				failed = true;
-			}
-			if (bar.getSkipCount() != 0) {
-				skipped = true;
-			}
-		}
-		// we can't be both skipped and failed - so failed takes precedence
-		if (failed) {
-			skipped = false;
-		}
-	}
+        if (backgroundResult != null) {
+            backgroundResult.tally();
+            duration += backgroundResult.getDuration();
+            if (backgroundResult.getFailCount() != 0) {
+                failed = true;
+            }
+            if (backgroundResult.getSkipCount() != 0) {
+                skipped = true;
+            }
+        }
+        for (BeforeAfterResult bar : beforeResults) {
+            duration += bar.getDuration();
+            if (bar.getFailCount() != 0) {
+                failed = true;
+            }
+            if (bar.getSkipCount() != 0) {
+                skipped = true;
+            }
+        }
+        for (BeforeAfterResult bar : afterResults) {
+            duration += bar.getDuration();
+            if (bar.getFailCount() != 0) {
+                failed = true;
+            }
+            if (bar.getSkipCount() != 0) {
+                skipped = true;
+            }
+        }
+        // we can't be both skipped and failed - so failed takes precedence
+        if (failed) {
+            skipped = false;
+        }
+    }
 
-
-	/**
-	 * If there was an error or a failure, this is the text from the message.
-	 */
-	public String getErrorDetails() {
+    /**
+     * If there was an error or a failure, this is the text from the message.
+     */
+    public String getErrorDetails() {
 		// TODO - although we can only have one ErrorDetails
-		// and only one step can be a failure - we could have multiple
-		// undefined options - so we should list all the undefined options here..
-		if (!isPassed()) {
-			if(backgroundResult != null && !backgroundResult.isPassed()) {
-				for (StepResult step : backgroundResult.getStepResults()) {
-					if (!step.isPassed()) {
-						return step.getResult().getErrorMessage();
-					}
-				}
-			}
-			for (BeforeAfterResult before : getBeforeResults()) {
-				if (!before.isPassed()) {
-					return before.getResult().getErrorMessage();
-				}
-			}
-			for (StepResult step : getStepResults()) {
-				if (!step.isPassed()) {
-					return step.getResult().getErrorMessage();
-				}
-			}
-			for (BeforeAfterResult after : getAfterResults()) {
-				if (!after.isPassed()) {
-					return after.getResult().getErrorMessage();
-				}
-			}
-		}
-		return null;
-	}
+        // and only one step can be a failure - we could have multiple
+        // undefined options - so we should list all the undefined options here..
+        if (!isPassed()) {
+            if (backgroundResult != null && !backgroundResult.isPassed()) {
+                for (StepResult step : backgroundResult.getStepResults()) {
+                    if (!step.isPassed()) {
+                        return step.getResult().getErrorMessage();
+                    }
+                }
+            }
+            for (BeforeAfterResult before : getBeforeResults()) {
+                if (!before.isPassed()) {
+                    return before.getResult().getErrorMessage();
+                }
+            }
+            for (StepResult step : getStepResults()) {
+                if (!step.isPassed()) {
+                    return step.getResult().getErrorMessage();
+                }
+            }
+            for (BeforeAfterResult after : getAfterResults()) {
+                if (!after.isPassed()) {
+                    return after.getResult().getErrorMessage();
+                }
+            }
+        }
+        return null;
+    }
 
+    public String getSource() {
+        return ScenarioToHTML.getHTML(this);
+    }
 
-	public String getSource() {
-		return ScenarioToHTML.getHTML(this); 
-	}
-	
-	@Override
-	// Takes into account that this can be reached from a TagResult as well as a FeatureResult. 
-	public String getRelativePathFrom(TestObject from) {
-		if (from == this) {
-			return ".";
-		}
-		
-		String path = _getRelativePathFrom(from, this);
-		if (path == null) {
-			// try our parent as we could be coming indirectly from a tag not a Feature
-			path = _getRelativePathFrom(from.getParent(), this);
-			if (path != null) {
-				path = "../" + path;
-			}
-		}
-		if (path != null) {
-			return path;
-		}
-		return  super.getRelativePathFrom(from);
-	}
-	
-	private String _getRelativePathFrom(TestObject from, TestObject src) {
-		StringBuilder buf = new StringBuilder();
-		TestObject next = src;
-		TestObject cur = next;
+    @Override
+    // Takes into account that this can be reached from a TagResult as well as a FeatureResult. 
+    public String getRelativePathFrom(TestObject from) {
+        if (from == this) {
+            return ".";
+        }
+
+        String path = _getRelativePathFrom(from, this);
+        if (path == null) {
+            // try our parent as we could be coming indirectly from a tag not a Feature
+            path = _getRelativePathFrom(from.getParent(), this);
+            if (path != null) {
+                path = "../" + path;
+            }
+        }
+        if (path != null) {
+            return path;
+        }
+        return super.getRelativePathFrom(from);
+    }
+
+    private String _getRelativePathFrom(TestObject from, TestObject src) {
+        StringBuilder buf = new StringBuilder();
+        TestObject next = src;
+        TestObject cur = next;
 		// Walk up my ancestors from leaf to root, looking for "from"
-		// and accumulating a relative url as I go
-		while (next != null && from != next) {
-			cur = next;
-			buf.insert(0, '/');
-			buf.insert(0, cur.getSafeName());
-			next = cur.getParent();
-		}
-		if (from == next) {
-			return buf.toString();
-		}
-		return null;
-	}
+        // and accumulating a relative url as I go
+        while (next != null && from != next) {
+            cur = next;
+            buf.insert(0, '/');
+            buf.insert(0, cur.getSafeName());
+            next = cur.getParent();
+        }
+        if (from == next) {
+            return buf.toString();
+        }
+        return null;
+    }
+
+    public void addEmbeddedItem(EmbeddedItem embeddedItem) {
+        this.embeddedItems.add(embeddedItem);
+    }
+
+    public List<EmbeddedItem> getEmbeddedItems() {
+        return this.embeddedItems;
+    }
+
 }
