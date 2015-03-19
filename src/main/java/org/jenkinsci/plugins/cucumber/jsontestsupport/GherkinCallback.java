@@ -35,11 +35,11 @@ import gherkin.formatter.model.ScenarioOutline;
 import gherkin.formatter.model.Step;
 import gherkin.formatter.model.Tag;
 import hudson.model.TaskListener;
-import java.util.Base64;
 
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.apache.commons.codec.binary.Base64;
 
 /**
  * The implementation that gets called back by the Gherkin parser.
@@ -271,7 +271,7 @@ class GherkinCallback implements Formatter, Reporter {
 	public void embedding(String mimeType, byte[] data) {
 		LOG.log(Level.FINE, "rep  embedding: {0}", mimeType);
                 currentScenarioResult.addEmbeddedItem(
-                        new EmbeddedItem(new String(Base64.getEncoder().encode(data)))
+                        new EmbeddedItem(new String(Base64.encodeBase64(data)))
                 );
 	}
 
