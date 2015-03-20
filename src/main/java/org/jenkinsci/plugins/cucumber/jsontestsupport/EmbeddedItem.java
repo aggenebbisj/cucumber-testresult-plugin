@@ -1,7 +1,9 @@
 
 package org.jenkinsci.plugins.cucumber.jsontestsupport;
 
-public class EmbeddedItem {
+import java.io.Serializable;
+
+public class EmbeddedItem implements Serializable {
 
     private final String data;
 
